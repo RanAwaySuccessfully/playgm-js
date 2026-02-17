@@ -1,0 +1,9 @@
+[submodule "player/psflib"]
+	path = player/lib/psflib
+	url = git@github.com:kode54/psflib.git
+[submodule "player/game-music-emu"]
+	path = player/lib/game-music-emu
+	url = https://bitbucket.org/mpyne/game-music-emu.git
+[submodule "lazyusf2"]
+	path = player/lib/lazyusf2
+	url = https://gitlab.com/kode54/lazyusf2.git
