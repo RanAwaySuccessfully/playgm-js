@@ -1,0 +1,9 @@
+--- lazyusf2/Makefile	2025-08-23 12:54:17.083692658 -0300
++++ lazyusf2.mk	2025-08-23 12:56:47.503758869 -0300
+@@ -1,5 +1,5 @@
+ 
+-CPU := $(shell uname -m)
++#CPU := $(shell uname -m)
+ ARCH := $(shell getconf LONG_BIT)
+ 
+ OPTFLAGS = -Os
