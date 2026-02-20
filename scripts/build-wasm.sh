@@ -12,36 +12,34 @@ cd player/build
 
 #mkdir -p game-music-emu
 #rm -r game-music-emu/*
-cd game-music-emu
+#cd game-music-emu
 #emcmake cmake ../../lib/game-music-emu -DGME_YM2612_EMU=GENS
 #emmake make
-emcc -lembind -fsanitize=undefined gme/libgme.a ../../lib/gme.cpp -o gme.js -sEXPORTED_RUNTIME_METHODS=HEAPU8 -sMODULARIZE -sEXPORT_NAME=GME
+#emcc -std=c++20 -lembind -fsanitize=undefined gme/libgme.a ../../lib/gme.cc -o gme.js -sEXPORTED_RUNTIME_METHODS=HEAPU8 -sMODULARIZE -sEXPORT_NAME=GME
 #cp gme/libgme.so.1 ../
-cd ../
+#cd ../
 echo ""
-
-echo "END OF BUILD EARLY"
-exit
 
 # psflib
 
-mkdir -p psflib
-rm -r psflib/*
-cp -r ../lib/psflib ./
-cd psflib
-emmake make all
-cd ../
+#mkdir -p psflib
+#rm -r psflib/*
+#cp -r ../lib/psflib ./
+#cd psflib
+#emmake make all CC="emcc --use-port=zlib"
+#cd ../
 echo ""
 
 # lazyusf2
 
-mkdir -p lazyusf2
-rm -r lazyusf2/*
-cp -r ../lib/lazyusf2 ./
+#mkdir -p lazyusf2
+#rm -r lazyusf2/*
+#cp -r ../lib/lazyusf2 ./
 cd lazyusf2
 # diff -Naru lazyusf2/Makefile lazyusf2.mk > lazyusf2.patch
 #patch -p1 -i ../lazyusf2.patch
-emmake all
+#emmake make liblazyusf.a
+emcc --use-port=zlib -std=c++20 -lembind -fsanitize=undefined liblazyusf.a ../psflib/libpsflib.a ../../lib/lusf2.cc -o lusf.js -sALLOW_MEMORY_GROWTH -sEXPORTED_RUNTIME_METHODS=HEAPU8 -sMODULARIZE -sEXPORT_NAME=LUSF
 cd ../
 echo ""
 

@@ -32,11 +32,10 @@ SMWCentral.SPCPlayer.Backend = {
   locked: true,
   _interval: null,
   _needsDraining: false,
-  wasm: null,
+  wasmType: null,
+  wasm: {},
 
-  initialize(wasm) {
-    this.wasm = wasm;
-
+  initialize() {
     if (this.status !== 0) {
       return;
     }
@@ -51,41 +50,86 @@ SMWCentral.SPCPlayer.Backend = {
     this.status = 1;
   },
   getInfo() {
-    this.playerClass.Info();
-    
-    return {
-      "duration": this.playerClass.length / 1000,
-      "intro_length": this.playerClass.intro_length / 1000,
-      "loop_length": this.playerClass.loop_length / 1000,
-      "play_length": this.playerClass.play_length / 1000,
-      "fade": this.playerClass.fade_length / 1000,
-      "game": this.playerClass.game,
-      "title": this.playerClass.song,
-      "author": this.playerClass.author,
-      "copyright": this.playerClass.copyright,
-      "comment": this.playerClass.comment,
-      "dumper": this.playerClass.dumper
-    };
+    const obj = this.playerClass.Info();
+
+    if (this.wasmType === "GME") {
+      return {
+        "duration": obj.length / 1000,
+        "intro_length": obj.intro_length / 1000,
+        "loop_length": obj.loop_length / 1000,
+        "play_length": obj.play_length / 1000,
+        "fade": obj.fade_length / 1000,
+        "game": obj.game,
+        "title": obj.song,
+        "author": obj.author,
+        "copyright": obj.copyright,
+        "comment": obj.comment,
+        "dumper": obj.dumper
+      };
+    } else {
+      return {
+        "duration": obj.length ? Math.round(unformatTimeFromString(obj.length) / 1000) : 0,
+        "intro_length": 0,
+        "loop_length": 0,
+        "play_length": 0,
+        "fade": obj.fade ? Math.round(unformatTimeFromString(obj.fade) / 1000) : 0,
+        "game": obj.game || "",
+        "title": obj.title || "",
+        "author": obj.artist || "",
+        "copyright": obj.copyright || "",
+        "comment": obj.comment || "",
+        "dumper": obj.usfby || ""
+      };
+    }
   },
-  loadSPC(spc, time = 0) {
+  load(file, time = 0) {
     if (this.status !== 1) {
-      throw new TypeError("Cannot play SPC right now");
+      throw new TypeError("Cannot play right now");
     }
 
-    this.stopSPC(false);
+    this.stopPlaythrough(false);
     this.sourceNode?.disconnect(this.gainNode);
 
-    this.playerClass = new this.wasm.PlayerGME();
+    const isPSF = String.fromCharCode(...file.file.slice(0, 4)) === "PSF!";
+    if (isPSF) {
+      this.wasmType = "LUSF";
+      this.playerClass = new this.wasm.LUSF.PlayerLUSF();
+    } else {
+      this.wasmType = "GME";
+      this.playerClass = new this.wasm.GME.PlayerGME();
+    }
 
-    this.playerClass.File(spc, "spc");
-    this.playerClass.Initialize();
-    this.playerClass.Ready();
+    let error = this.playerClass.File(file.file, file.filename);
+    if (error) {
+      console.error(error);
+    }
+
+    if (file.extras && file.extras.length) {
+      file.extras.forEach(extra => {
+        error = this.playerClass.File(extra.file, extra.filename);
+        //error = this.playerClass.File(extra.file, file.filename);
+        if (error) {
+          console.error(error);
+        }
+      });
+    }
+
+    const ret = this.playerClass.Initialize();
+    if (ret < 0) {
+      console.error(ret);
+    }
+
+    error = this.playerClass.Ready();
+    if (error) {
+      console.error(error);
+    }
 
     if (time > 0) {
       this.playerClass.Seek(time);
     }
 
-    this.playSPC();
+    this.play();
+    this.playerClass.PlayUntil(-1);
 
     this.sourceNode = new AudioWorkletNode(this.context, "worklet", {
       outputChannelCount: [2]
@@ -100,7 +144,13 @@ SMWCentral.SPCPlayer.Backend = {
 
     this.resume();
   },
-  stopSPC(pause = true) {
+  seek(time) {
+    const error = this.playerClass.Seek(time);
+    if (error) {
+      console.error(error);
+    }
+  },
+  stopPlaythrough(pause = true) {
     if (pause) {
       this.pause();
     }
@@ -112,6 +162,9 @@ SMWCentral.SPCPlayer.Backend = {
 
     clearInterval(this._interval);
     this._needsDraining = false;
+    if (this.sourceNode) {
+      this.sourceNode.port.postMessage("done");
+    }
   },
   pause() {
     if (this.context != null) {
@@ -149,7 +202,7 @@ SMWCentral.SPCPlayer.Backend = {
     this.gainNode.gain.setValueAtTime(this.getVolume(), this.context.currentTime);
     this.gainNode.gain.exponentialRampToValueAtTime(0.01, this.context.currentTime + duration);
   },
-  playSPC() {
+  play() {
 
     let stillProcessing = false;
 
@@ -160,11 +213,12 @@ SMWCentral.SPCPlayer.Backend = {
         const frame = this.playerClass.Play();
         
         if (frame.size() === 0) {
-          if (this.playerClass.play_error) {
-            console.error(this.playerClass.play_error);
-            this.stopSPC();
+          if (this.playerClass.last_error) {
+            console.error(this.playerClass.last_error);
+            this.stopPlaythrough();
           }
           
+          this.sourceNode.port.postMessage("done");
           return;
         }
 

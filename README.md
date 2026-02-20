@@ -1,4 +1,4 @@
-# PlayGM-JS
+# PlayGM-js
 
 A Go wrapper around game music libraries (and ffmpeg). Works as a library that can be imported into your browser.
 
@@ -39,3 +39,5 @@ First, download the repository to your computer using `git clone --recurse-submo
 You may view the full license text [here](LICENSE).
 
 **Note:** If compiled with `lazyusf2` or if `game-music-emu` is changed to use the MAME YM2612 emulator, it can only be distributed under the terms of the GNU GPLv2.
+
+**Note:** Contains code from [SMWCentral's SPC Player](https://codeberg.org/Telinc1/smwcentral-spc-player) which also licensed under the GNU LGPLv2.1.

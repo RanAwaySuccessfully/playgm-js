@@ -1,10 +1,15 @@
 class InputWorklet extends AudioWorkletProcessor {
 
     #buffer = [];
+    #done = false;
 
     constructor() {
         super();
         this.port.onmessage = (event) => {
+            if (event.data === "done") {
+                this.#done = true;
+            }
+
             this.#buffer.push(event.data);
         };
     }
@@ -12,7 +17,7 @@ class InputWorklet extends AudioWorkletProcessor {
     process(inputs, outputs, parameters) {
         const output = outputs[0];
 
-        console.log(this.#buffer.length);
+        //console.log(this.#buffer.length);
         if (this.#buffer.length >= 100) {
             this.port.postMessage(true);
         } else {
@@ -58,6 +63,8 @@ class InputWorklet extends AudioWorkletProcessor {
             } else {
                 this.#buffer[0] = frame.slice(i);
             }
+        } else if (this.#done) {
+            return false;
         }
 
         return true;

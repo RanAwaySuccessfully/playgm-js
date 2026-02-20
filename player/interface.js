@@ -35,6 +35,13 @@
 			item.classList.add("playing");
 		}
 
+		item.onclick = () => {
+			SMWCentral.SPCPlayer.loadSong({
+				index: index,
+				files: song.files
+			});
+		};
+
 		return item;
 	};
 
@@ -142,7 +149,7 @@
 				return;
 			}
 
-			if (song == null) {
+			if (!song.files.length) {
 				document.body.classList.remove("fetching-song");
 				SMWCentral.SPCPlayer.onError("Couldn't read SPC file.");
 				return;
@@ -151,8 +158,10 @@
 			finished = false;
 			timer.finish = 0;
 
-			if (typeof song.data === "string" && song.spc == null) {
-				const spc = window.atob(song.data);
+			const songAtIndex = song.files[song.index];
+
+			if (typeof songAtIndex.data === "string" && songAtIndex.file == null) {
+				const spc = window.atob(songAtIndex.data);
 				const spcLength = spc.length;
 				const data = new Uint8Array(new ArrayBuffer(spcLength));
 
@@ -160,14 +169,12 @@
 					data[index] = spc.charCodeAt(index);
 				}
 
-				song.spc = data.buffer;
+				songAtIndex.file = data.buffer;
 			}
 
-			SPCPlayer.loadSPC(new Uint8Array(song.spc), time);
+			SPCPlayer.load(songAtIndex, time * 1000);
 			updateVolume();
 
-			song.files = ["File"];
-			song.filename = "File";
 			const info = SPCPlayer.getInfo();
 
 			playerUI.pauseBtn.classList.remove("hidden");
@@ -176,7 +183,7 @@
 			const title = [info.game, info.title].filter((value) => value.trim().length > 0);
 			const titleElements = player.getElementsByClassName("title");
 			for (let i = 0; i < titleElements.length; i++) {
-				titleElements[i].innerText = title.length > 0 ? title.join(" - ") : song.filename;
+				titleElements[i].innerText = title.length > 0 ? title.join(" - ") : songAtIndex.filename;
 			}
 
 			const subtitle = [info.author, info.comment].filter((value) => value.trim().length > 0);
@@ -191,7 +198,7 @@
 			}
 
 			// fill track details
-			const date = song.date.trim();
+			const date = songAtIndex.date.trim();
 
 			if (date) {
 				playerUI.details.innerText = `Exported on ${date}`;
@@ -233,24 +240,24 @@
 				}
 
 				const files = song.files;
-				let common = files[0].length;
+				let common = files[0].filename.length;
 
 				for (let i = 1; i < files.length; i++) {
 					let position = 0;
 					for (
 						;
-						position < common && position < files[i].length && files[0][position] === files[i][position];
+						position < common && position < files[i].filename.length && files[0].filename[position] === files[i].filename[position];
 						position++
 					);
 
 					common = position;
 				}
 
-				const prefix = files[0].slice(0, common).lastIndexOf("/") + 1;
+				const prefix = files[0].filename.slice(0, common).lastIndexOf("/") + 1;
 
 				files.forEach((file, index) => {
 					playerUI.tracklist.appendChild(
-						SMWCentral.SPCPlayer.createPlaylistItem(song, file.slice(prefix), index)
+						SMWCentral.SPCPlayer.createPlaylistItem(song, file.filename.slice(prefix), index)
 					);
 				});
 				playerUI.trackListContainer.classList.remove("hidden");
@@ -267,7 +274,7 @@
 		};
 
 		const updateTimer = () => {
-			if (timer.target <= 0 || SPCPlayer.status !== 1 || SPCPlayer.spcPointer === null) {
+			if (timer.target <= 0 || SPCPlayer.status !== 1 || SPCPlayer.playerClass === null) {
 				return;
 			}
 
@@ -279,7 +286,7 @@
 				playerUI.pauseBtn.classList.add("hidden");
 				playerUI.playBtn.classList.remove("hidden");
 
-				SPCPlayer.stopSPC();
+				SPCPlayer.stopPlaythrough();
 
 				SMWCentral.SPCPlayer.onEnd();
 
@@ -295,7 +302,7 @@
 		const updateUI = () => {
 			requestAnimationFrame(updateUI);
 
-			if (timer.target <= 0 || SPCPlayer.status !== 1 || SPCPlayer.spcPointer === null) {
+			if (timer.target <= 0 || SPCPlayer.status !== 1 || SPCPlayer.playerClass === null) {
 				// reset seek bar, unless we've just finished playing
 				if (!finished) {
 					playerUI.seekControl.style.backgroundImage = `none`;
@@ -328,8 +335,68 @@
 			return new TextDecoder("latin1").decode(bytes.slice(start, start + realLength));
 		};
 
+		const parseZip = async (zip_file, files) => {
+			const array = new Uint8Array(zip_file);
+			const isZIP = String.fromCharCode(...array.slice(0, 4)) === "PK\x03\x04";
+			if (!isZIP) {
+				return false;
+			}
+
+			const temp_files = [];
+			const extras = [];
+
+			var zip = new window.JSZip();
+			await zip.loadAsync(zip_file);
+			var entries = zip.file(/\.\w+$/);
+			if (!entries[0]) {
+				throw "That `.zip` file does not contain any playable files.";
+			}
+
+			const file_entries = entries.filter(entry => !entry.dir);
+
+			const promises = file_entries.map(async entry => {
+				const buffer = await entry.async("uint8array");
+
+				const match = entry.name.match(/\.[^.]+$/);
+				const type = match ? match[0] : undefined;
+
+				switch (type) {
+					case undefined:
+						return;
+					case ".m3u":
+					case ".usflib":
+						extras.push({
+							filename: entry.name,
+							file: buffer
+						});
+						break;
+					default:
+						const data = parseSPC(buffer);
+
+						temp_files.push({
+							filename: entry.name,
+							date: data?.date || "",
+							file: buffer
+						});
+				}
+			});
+
+			await Promise.all(promises);
+
+			const result = window.returnTrackList(temp_files, extras);
+			result.forEach(file => {
+				files.push(file);
+			});
+
+			return true;
+		}
+
 		const parseSPC = (spc) => {
 			const array = new Uint8Array(spc);
+			const isSPC = String.fromCharCode(array[0], array[1], array[2], array[3]) === "SNES";
+			if (!isSPC) {
+				return {};
+			}
 
 			return {
 				title: extractString(array, 0x2e, 32) || "SPC File",
@@ -342,16 +409,23 @@
 			};
 		};
 
-		const loadSPC = (spc) => {
-			const data = parseSPC(spc);
+		const loadSPC = async (file, filename) => {
+
+			const files = [];
+			const isZip = await parseZip(file, files);
+
+			if (!isZip) {
+				const data = parseSPC(file);
+				files.push({
+					filename: filename,
+					date: data?.date || "",
+					file: new Uint8Array(file),
+				});
+			}
 
 			return loadSong({
 				index: 0,
-				//files: [data.title],
-				//filename: data.title,
-				//...data,
-				date: data.date,
-				spc,
+				files: files
 			});
 		};
 
@@ -427,7 +501,7 @@
 				return;
 			}
 
-			SPCPlayer.stopSPC();
+			SPCPlayer.stopPlaythrough();
 			player.classList.remove("shown");
 
 			SMWCentral.SPCPlayer.onStop();
@@ -457,8 +531,9 @@
 			const position = Math.min(Math.max(event.offsetX, 0), range);
 			const seconds = Math.round(Math.min(Math.max((timer.target * position) / range, 0), timer.target));
 
-			document.body.classList.add("fetching-song");
-			loadSong(currentSong, seconds);
+			//document.body.classList.add("fetching-song");
+			//loadSong(currentSong, seconds);
+			SPCPlayer.seek(seconds * 1000);
 		});
 
 		document.body.addEventListener("click", () => {
@@ -480,6 +555,7 @@
 		// track list overflow
 		trackListOverflow();
 
+		SMWCentral.SPCPlayer.parseZip = parseZip;
 		SMWCentral.SPCPlayer.parseSPC = parseSPC;
 
 		SMWCentral.SPCPlayer.loadSong = loadSong;
@@ -488,7 +564,15 @@
 		SMWCentral.SPCPlayer.loadFromLink = (link, options = {}) =>
 			fetch(link.href, options)
 				.then((response) => response.arrayBuffer())
-				.then(loadSPC);
+				.then(arrayBuffer => {
+					let filename = link.href;
+
+					try {
+						filename = link.href.match(/[^/](.+)$/)[1];
+					} catch (sorry_nothing) {}
+
+					loadSPC(arrayBuffer, filename);
+				});
 	}
 
 	// function to allow the player window to be dragged

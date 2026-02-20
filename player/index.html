@@ -1,27 +1,200 @@
-<!doctype html>
-<html>
+﻿<!DOCTYPE html>
+<html lang="en-US">
   <head>
+    <title>PlayGM-js</title>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato">
     <style>
+      html, body {min-height: 100%;} /* This is a really stupid fix. */
       body {
-        font-family: 'sans-serif';
-        background: #225;
+        margin: 0;
+        background: url("background.jpg") top right;
+        font-family: Lato, "Trebuchet MS", Helvetica, sans-serif;
+        font-size: 16px;
+        color: #FFF;
+      }
+      header {margin-top: 20px; font-size: 20pt; text-align: center;}
+      section, article, nav {
+        margin: 20px;
+        border: solid #4C65AE;
+        border-width: 0 2px;
+        background: #0D111A;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 10px 20px;
+        text-align: left;
+        word-wrap: break-word;
+      }
+      a {color: #667FCC; text-decoration: none;}
+      a:hover {color: #B8C2E0; text-decoration: underline;}
+      ol, ul {margin: 0; padding-left: 30px;}
+      ul {list-style-type: square;}
+
+      table {
+        border-collapse: collapse;
+      }
+
+      table th {
+        text-align: center;
+      }
+
+      table td {
+        padding: 3px 6px;
+        border-bottom: 1px dashed #FFF;
+      }
+
+      table td:not(:first-of-type):not(:last-of-type) {
+        border-left: 1px dashed #FFF;
+        border-right: 1px dashed #FFF;
+      }
+
+      #spc-player-content .track-info .title:first-of-type {
+        animation: left-to-right-marquee 10s ease-in-out infinite;
+        overflow: visible !important;
+        position: absolute;
+      }
+
+      #spc-player-content .track-info .title:last-of-type {
+        visibility: hidden;
+      }
+
+      @keyframes left-to-right-marquee {
+        0% { transform: translateX(0); }
+        50% { transform: translateX(calc(378px - max(378px, 100%))); }
+        100% { transform: translateX(0); }
       }
     </style>
     <link rel="stylesheet" href="https://unpkg.com/@smwcentral/spc-player@2.0.2/dist/spc_player.css">
+    <script src="jszip.min.js"></script>
+    <script src="suzygm-utils.js"></script>
     <script src="build/game-music-emu/gme.js"></script>
+    <script src="build/lazyusf2/lusf.js"></script>
     <script>
-      GME().then(wasm => {
+      function unformatTime(d, h, m, s) {
+        d *= 24;
+        h += d;
+        h *= 60;
+        m += h;
+        m *= 60;
+        s += m;
+        s *= 1000;
+        return s; // milliseconds
+      }
+
+      function unformatTimeFromString(string) {
+        if (!string) {
+          return;
+        }
+
+        const time = string.match(/(\d+):(\d+)(?:\.(\d+))?/);
+        if (!time) {
+          return;
+        }
+
+        let length = unformatTime(0, 0, Number(time[1]), Number(time[2]));
+        if (time[3]) {
+          length += Number(time[3]);
+        }
+
+        return length;
+      }
+
+      const players = [
+        GME(),
+        LUSF(),
+      ];
+
+      Promise.all(players).then(([GME, LUSF]) => {
         const Adaptor = SMWCentral.SPCPlayer.Backend;
-        Adaptor.initialize(wasm);
+        Adaptor.wasm["GME"] = GME;
+        Adaptor.wasm["LUSF"] = LUSF;
+        Adaptor.initialize();
+
         Adaptor.context.audioWorklet.addModule("worklet.js");
       });
     </script>
   </head>
   <body>
-    <h1><a href="17 Scenarios.spc" onclick="SMWCentral.SPCPlayer.loadFromLink(this); event.preventDefault();">SPC</a></h1>
-    <h1><a href="13 - Launch Base Zone Act 1.vgm" onclick="SMWCentral.SPCPlayer.loadFromLink(this); event.preventDefault();">VGM</a></h1>
-    <h1><a href="h0ffman - 1-Bit High and Rising (2023) (Revision 2023, 1).ay" onclick="SMWCentral.SPCPlayer.loadFromLink(this); event.preventDefault();">AY</a></h1>
-    <h1><a href="Pitfall_II.sap" onclick="SMWCentral.SPCPlayer.loadFromLink(this); event.preventDefault();">SAP</a></h1>
+    
+    <header>PlayGM-js + SMWCentral's SPC Player</header>
+    
+    <section>
+      <p>Supported file formats:</p>
+      <table><tbody>
+        <tr>
+          <th>System</th>
+          <th>File formats</th>
+          <th>Notes</th>
+        </tr>
+        <tr>
+          <td>MSX</td>
+          <td>KSS</td>
+          <td>Expansion chip not supported for now.</td>
+        </tr>
+        <tr>
+          <td>NES/Famicom</td>
+          <td>NSF</td>
+          <td>Famicom Disk System not supported for now.</td>
+        </tr>
+        <tr>
+          <td>Game Boy</td>
+          <td>GBS</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td>PC-Engine<br>Turbo-Grafx 16</td>
+          <td>HES</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td>Master System<br>Game Gear</td>
+          <td>VGM* or VGZ</td>
+          <td>FM audio not supported for now.</td>
+        </tr>
+        <tr>
+          <td>Mega Drive<br>Genesis</td>
+          <td>VGM* or VGZ</td>
+          <td>PWM, used in the 32-X, not supported for now.</td>
+        </tr>
+        <tr>
+          <td>Super Nintendo<br>Super Famicom</td>
+          <td>SPC</td>
+          <td>MSU-1 not supported for now.</td>
+        </tr>
+        <tr>
+          <td>Nintendo 64</td>
+          <td>USF</td>
+          <td>.miniusf files must also have an accompanying .usflib file.</td>
+        </tr>
+        <tr>
+          <td>Atari XL/XE (8-bit)</td>
+          <td>SAP</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td>ZX Spectrum</td>
+          <td>AY</td>
+          <td></td>
+        </tr>
+      </tbody></table>
+
+      <p>Here's some tests:</p>
+      <ul>
+        <li><a href="test/c3s2021-21.spc" onclick="SMWCentral.SPCPlayer.loadFromLink(this); event.preventDefault();">Battle Inside Water, ported by Milon Luxy</a></li>
+        <li><a href="test/17 Scenarios.spc" onclick="SMWCentral.SPCPlayer.loadFromLink(this); event.preventDefault();">SPC - Internal Superstar Soccer</a></li>
+        <li><a href="test/13 - Launch Base Zone Act 1.vgm" onclick="SMWCentral.SPCPlayer.loadFromLink(this); event.preventDefault();">VGM - Launch Base Zone</a></li>
+        <li><a href="test/h0ffman - 1-Bit High and Rising (2023) (Revision 2023, 1).ay" onclick="SMWCentral.SPCPlayer.loadFromLink(this); event.preventDefault();">AY - 1-bit high and rising</a></li>
+        <li><a href="test/Pitfall_II.sap" onclick="SMWCentral.SPCPlayer.loadFromLink(this); event.preventDefault();">SAP - Atari XL Pitfall II</a></li>
+        <li><a href="test/01 Monopoly.usf" onclick="SMWCentral.SPCPlayer.loadFromLink(this); event.preventDefault();">USF - Monopoly 64</a></li>
+        <li><a href="test/Bomberman 64 - The Second Attack.zip" onclick="SMWCentral.SPCPlayer.loadFromLink(this); event.preventDefault();">USF - Bomberman 64: Second Attack</a></li>
+        <li><a href="test/Mario Party.zip" onclick="SMWCentral.SPCPlayer.loadFromLink(this); event.preventDefault();">USF - Mario Party 1</a></li>
+      </ul>
+
+      <p>Upload a file or a zip:</p>
+      <input type="file" onchange="PlayGMupload(this);" />
+      
+      <p>That's about it.</p>
+    </section>
 
     <!-- SMWCentral Player HTML -->
 
@@ -57,6 +230,7 @@
         <div id="spc-player-content" class="player-content">
           <div class="track-info">
             <h2 class="title">Song Title</h2>
+            <h2 class="title"></h2>
             <h3 class="subtitle"></h3>
             <div class="details"></div>
           </div>
