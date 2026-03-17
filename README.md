@@ -1,18 +1,6 @@
 # PlayGM-js
 
-A Go wrapper around game music libraries (and ffmpeg). Works as a library that can be imported into your browser.
-
-## Running
-
-[...]
-
-### Usage
-
-[...]
-
-## Building from source
-
-First, download the repository to your computer using `git clone --recurse-submodules -j8 https://github.com/RanAwaySuccessfully/playgm.git`. This will download the necessary submodules alongside the main repo.
+This project has been moved to [Codeberg](https://codeberg.org/RanAwaySuccessfully/PlayGM), but if you want you can try to use the unfinished version that's in this repo.
 
 ## License
 
